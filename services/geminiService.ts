@@ -1,42 +1,54 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { GrammarLesson } from "../types";
 
-// ------------------------------------------------------------------
-// Environment Variable Handling for Vercel/Vite & Sandbox
-// ------------------------------------------------------------------
-// We access these at the top level to ensure the build tool (Vite)
-// can statically replace them during the build process.
-
-// @ts-ignore
-const VITE_API_KEY = import.meta.env?.VITE_API_KEY;
-// @ts-ignore
-const VITE_GOOGLE_API_KEY = import.meta.env?.VITE_GOOGLE_API_KEY;
-// @ts-ignore
-const VITE_GEMINI_API_KEY = import.meta.env?.VITE_GEMINI_API_KEY;
-// @ts-ignore
-const VITE_STD_API_KEY = import.meta.env?.API_KEY;
-
-// Fallback for Node.js / Sandbox environments
-let PROCESS_API_KEY = "";
-try {
-  if (typeof process !== "undefined" && process.env) {
-    PROCESS_API_KEY = process.env.API_KEY || "";
+// Helper to safely get the API key only when needed (Lazy Evaluation)
+// This prevents top-level access which causes "process is not defined" or build-time issues
+const getApiKey = (): string => {
+  // 1. Try import.meta.env (Vite / Modern Browsers)
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== "undefined" && import.meta.env) {
+       // @ts-ignore
+       if (import.meta.env.VITE_API_KEY) return import.meta.env.VITE_API_KEY;
+       // @ts-ignore
+       if (import.meta.env.VITE_GOOGLE_API_KEY) return import.meta.env.VITE_GOOGLE_API_KEY;
+       // @ts-ignore
+       if (import.meta.env.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
+       // @ts-ignore
+       if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
+    }
+  } catch (e) {
+    // Ignore errors in environments that don't support import.meta
   }
-} catch (e) {
-  // Ignore reference errors
-}
 
-const FINAL_API_KEY = VITE_API_KEY || VITE_GOOGLE_API_KEY || VITE_GEMINI_API_KEY || VITE_STD_API_KEY || PROCESS_API_KEY || "";
+  // 2. Try process.env (Node.js / Webpack / Vercel Serverless)
+  try {
+    if (typeof process !== "undefined" && process.env) {
+      if (process.env.API_KEY) return process.env.API_KEY;
+      if (process.env.REACT_APP_API_KEY) return process.env.REACT_APP_API_KEY;
+    }
+  } catch (e) {
+    // Ignore reference errors
+  }
+
+  return "";
+};
 
 export const getDebugInfo = () => {
+  let hasMeta = false;
+  let hasProcess = false;
+  
+  try { 
+    // @ts-ignore
+    hasMeta = typeof import.meta !== "undefined" && !!import.meta.env; 
+  } catch(e) {}
+  try { hasProcess = typeof process !== "undefined" && !!process.env; } catch(e) {}
+
   return {
-    VITE_API_KEY: !!VITE_API_KEY,
-    VITE_GOOGLE_API_KEY: !!VITE_GOOGLE_API_KEY,
-    VITE_GEMINI_API_KEY: !!VITE_GEMINI_API_KEY,
-    API_KEY_META: !!VITE_STD_API_KEY,
-    PROCESS_KEY: !!PROCESS_API_KEY,
-    KEY_LENGTH: FINAL_API_KEY.length,
-    ENV_TYPE: typeof import.meta !== "undefined" ? "import.meta available" : "import.meta missing"
+    hasImportMeta: hasMeta,
+    hasProcessEnv: hasProcess,
+    keyLength: getApiKey().length,
+    timestamp: new Date().toISOString()
   };
 };
 
@@ -45,16 +57,16 @@ export const fetchGrammarLesson = async (
   topicTitle: string,
   topicDescription: string
 ): Promise<GrammarLesson> => {
-  const modelId = "gemini-2.5-flash"; // Using flash for speed
-
-  const apiKey = FINAL_API_KEY;
+  // Initialization happens ONLY when this function is called (Button Click)
+  const apiKey = getApiKey();
   
   if (!apiKey) {
-    console.error("API Key is missing. Debug Info:", getDebugInfo());
-    throw new Error("API Key is missing. Please check your deployment settings.");
+    console.error("API Key is missing. Environment State:", getDebugInfo());
+    throw new Error("API Key configuration not found. Please check VITE_API_KEY or API_KEY in your environment variables.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
+  const modelId = "gemini-2.5-flash";
 
   const prompt = `
     Create a structured grammar lesson for:
