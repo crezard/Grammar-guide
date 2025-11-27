@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GradeLevel, CurriculumItem, GrammarLesson, LoadingState } from './types';
 import { CURRICULUM } from './constants';
-import { fetchGrammarLesson } from './services/geminiService';
+import { fetchGrammarLesson, getDebugInfo } from './services/geminiService';
 import { TopicCard } from './components/TopicCard';
 import { LessonView } from './components/LessonView';
 import { GraduationCap, Loader2, Sparkles, AlertCircle } from 'lucide-react';
@@ -126,10 +126,21 @@ function App() {
 
         {/* Error State */}
         {loadingState === LoadingState.ERROR && (
-          <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+          <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4">
              <AlertCircle className="w-16 h-16 text-red-200 mb-4" />
             <h3 className="text-xl font-bold text-slate-800 mb-2">오류가 발생했습니다</h3>
             <p className="text-slate-600 mb-6">{errorMsg}</p>
+            
+            {/* Debug Info for Deployment Troubleshooting */}
+            <div className="bg-slate-100 p-4 rounded-lg text-left text-xs font-mono text-slate-500 mb-6 w-full max-w-md mx-auto overflow-x-auto">
+              <p className="font-bold text-slate-700 mb-2 border-b pb-1">Environment Debug Info:</p>
+              <pre>{JSON.stringify(getDebugInfo(), null, 2)}</pre>
+              <p className="mt-2 text-[10px] text-slate-400">
+                If all keys are false, check your Vercel Environment Variables settings.
+                Ensure keys start with VITE_ if using Vite.
+              </p>
+            </div>
+
             <button
               onClick={handleBackToCurriculum}
               className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"

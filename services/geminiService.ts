@@ -1,31 +1,43 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { GrammarLesson } from "../types";
 
-// Helper to safely get the API key in various environments (Sandbox vs Vercel/Vite)
-const getApiKey = (): string => {
-  // 1. Try Vite-style environment variables (for Vercel/Netlify deployments)
-  try {
-    // @ts-ignore
-    if (typeof import.meta !== "undefined" && import.meta.env) {
-      // @ts-ignore
-      const env = import.meta.env;
-      const key = env.VITE_API_KEY || env.VITE_GOOGLE_API_KEY || env.VITE_GEMINI_API_KEY || env.API_KEY;
-      if (key) return key;
-    }
-  } catch (e) {
-    // Ignore error if import.meta is not available
-  }
+// ------------------------------------------------------------------
+// Environment Variable Handling for Vercel/Vite & Sandbox
+// ------------------------------------------------------------------
+// We access these at the top level to ensure the build tool (Vite)
+// can statically replace them during the build process.
 
-  // 2. Try standard process.env (for Sandbox / Node environments)
-  try {
-    if (typeof process !== "undefined" && process.env) {
-      return process.env.API_KEY || "";
-    }
-  } catch (e) {
-    // Ignore error if process is not defined
-  }
+// @ts-ignore
+const VITE_API_KEY = import.meta.env?.VITE_API_KEY;
+// @ts-ignore
+const VITE_GOOGLE_API_KEY = import.meta.env?.VITE_GOOGLE_API_KEY;
+// @ts-ignore
+const VITE_GEMINI_API_KEY = import.meta.env?.VITE_GEMINI_API_KEY;
+// @ts-ignore
+const VITE_STD_API_KEY = import.meta.env?.API_KEY;
 
-  return "";
+// Fallback for Node.js / Sandbox environments
+let PROCESS_API_KEY = "";
+try {
+  if (typeof process !== "undefined" && process.env) {
+    PROCESS_API_KEY = process.env.API_KEY || "";
+  }
+} catch (e) {
+  // Ignore reference errors
+}
+
+const FINAL_API_KEY = VITE_API_KEY || VITE_GOOGLE_API_KEY || VITE_GEMINI_API_KEY || VITE_STD_API_KEY || PROCESS_API_KEY || "";
+
+export const getDebugInfo = () => {
+  return {
+    VITE_API_KEY: !!VITE_API_KEY,
+    VITE_GOOGLE_API_KEY: !!VITE_GOOGLE_API_KEY,
+    VITE_GEMINI_API_KEY: !!VITE_GEMINI_API_KEY,
+    API_KEY_META: !!VITE_STD_API_KEY,
+    PROCESS_KEY: !!PROCESS_API_KEY,
+    KEY_LENGTH: FINAL_API_KEY.length,
+    ENV_TYPE: typeof import.meta !== "undefined" ? "import.meta available" : "import.meta missing"
+  };
 };
 
 export const fetchGrammarLesson = async (
@@ -35,13 +47,11 @@ export const fetchGrammarLesson = async (
 ): Promise<GrammarLesson> => {
   const modelId = "gemini-2.5-flash"; // Using flash for speed
 
-  // Initialize AI instance lazily inside the function to prevent top-level crashes
-  // if process or env vars are missing during initial page load.
-  const apiKey = getApiKey();
+  const apiKey = FINAL_API_KEY;
   
   if (!apiKey) {
-    console.error("API Key is missing. Please check VITE_API_KEY or process.env.API_KEY configuration.");
-    throw new Error("API Key is missing");
+    console.error("API Key is missing. Debug Info:", getDebugInfo());
+    throw new Error("API Key is missing. Please check your deployment settings.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
