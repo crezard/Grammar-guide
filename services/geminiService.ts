@@ -1,68 +1,42 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { GrammarLesson } from "../types";
 
-// Helper to safely get the API key only when needed (Lazy Evaluation)
-// This prevents top-level access which causes "process is not defined" or build-time issues
-const getApiKey = (): string => {
-  // 1. Try import.meta.env (Vite / Modern Browsers)
-  try {
-    // @ts-ignore
-    if (typeof import.meta !== "undefined" && import.meta.env) {
-       // @ts-ignore
-       if (import.meta.env.VITE_API_KEY) return import.meta.env.VITE_API_KEY;
-       // @ts-ignore
-       if (import.meta.env.VITE_GOOGLE_API_KEY) return import.meta.env.VITE_GOOGLE_API_KEY;
-       // @ts-ignore
-       if (import.meta.env.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
-       // @ts-ignore
-       if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
-    }
-  } catch (e) {
-    // Ignore errors in environments that don't support import.meta
-  }
-
-  // 2. Try process.env (Node.js / Webpack / Vercel Serverless)
-  try {
-    if (typeof process !== "undefined" && process.env) {
-      if (process.env.API_KEY) return process.env.API_KEY;
-      if (process.env.REACT_APP_API_KEY) return process.env.REACT_APP_API_KEY;
-    }
-  } catch (e) {
-    // Ignore reference errors
-  }
-
-  return "";
-};
-
-export const getDebugInfo = () => {
-  let hasMeta = false;
-  let hasProcess = false;
-  
-  try { 
-    // @ts-ignore
-    hasMeta = typeof import.meta !== "undefined" && !!import.meta.env; 
-  } catch(e) {}
-  try { hasProcess = typeof process !== "undefined" && !!process.env; } catch(e) {}
-
-  return {
-    hasImportMeta: hasMeta,
-    hasProcessEnv: hasProcess,
-    keyLength: getApiKey().length,
-    timestamp: new Date().toISOString()
-  };
-};
-
 export const fetchGrammarLesson = async (
   grade: number,
   topicTitle: string,
   topicDescription: string
 ): Promise<GrammarLesson> => {
-  // Initialization happens ONLY when this function is called (Button Click)
-  const apiKey = getApiKey();
-  
+  // Lazy initialization of API Key
+  // This ensures we check for the key at runtime (when button is clicked), 
+  // preventing 'process is not defined' errors during initial page load.
+  let apiKey = '';
+
+  try {
+    // 1. Try standard Vite environment variables
+    // @ts-ignore
+    if (import.meta.env.VITE_API_KEY) apiKey = import.meta.env.VITE_API_KEY;
+    // @ts-ignore
+    else if (import.meta.env.API_KEY) apiKey = import.meta.env.API_KEY;
+  } catch (e) {
+    // import.meta might not be available in all environments
+  }
+
+  // 2. Fallback to process.env (Vercel / Node.js)
+  // We check for process existence to avoid ReferenceError in browsers
   if (!apiKey) {
-    console.error("API Key is missing. Environment State:", getDebugInfo());
-    throw new Error("API Key configuration not found. Please check VITE_API_KEY or API_KEY in your environment variables.");
+    try {
+      if (typeof process !== 'undefined' && process.env) {
+        if (process.env.API_KEY) apiKey = process.env.API_KEY;
+        else if (process.env.REACT_APP_API_KEY) apiKey = process.env.REACT_APP_API_KEY;
+      }
+    } catch (e) {
+      // process might not be available
+    }
+  }
+
+  if (!apiKey) {
+    console.error("API Key missing. Checked: VITE_API_KEY, API_KEY, process.env.API_KEY");
+    throw new Error("API Key configuration not found. Please set VITE_API_KEY in your environment variables.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
